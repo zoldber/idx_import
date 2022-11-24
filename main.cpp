@@ -2,16 +2,13 @@
 
 #define TRAIN_SET_DIR "../../mnist_data/train-images.idx3-ubyte"
 
-#define READ_TYPE unsigned char
-
-#define CAST_TYPE float
-
 int main(void) {
 
-    // creates new CAST_TYPE ** data memory block
-    auto castDemo = new idx::Set<READ_TYPE, CAST_TYPE>(TRAIN_SET_DIR);
+    // given file item data type 'd', and desired type 'c':
+    // template is auto mySet = new idx::Set<d, c>("~/my_data.idxN");
+    auto demo = new idx::Set<char, unsigned char>(TRAIN_SET_DIR);
 
-    auto setDims = castDemo->dims();
+    auto setDims = demo->dims();
 
     uint32_t i, I = std::get<0>(setDims);
     uint32_t r, R = std::get<1>(setDims);
@@ -27,7 +24,7 @@ int main(void) {
             for (c = 0; c < C; c++) {
 
                 // print pixel if darker than 50%
-                printf((castDemo->item(i)[(r * C) + c] > 0x80) ? "#" : " ");
+                putc(demo->item(i)[(r * C) + c] > 0x80 ? '#' : ' ', stdout);
 
             }
 

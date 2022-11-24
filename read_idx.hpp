@@ -181,11 +181,13 @@ namespace idx {
                 const unsigned int itemSize = R * C;
 
                 // the most ubiquitous MNIST seem to exclusively use uchar (hence no endianness beyond header)
-                // to store pixel values in each item; in the event that this is not true, a seperate block is
+                // to store pixel values in each item; in the event that this is not true, seperate blocks are
                 // present to initialize a new AutoEndianBuffer and format entries on little-endian machines.
-                if (sizeof(dataType)==sizeof(char)) {
+                if (sizeof(dataType) == sizeof(char)) {
 
-                    dataType buffer;
+                    // this executed significantly faster than an explicit signed->unsigned conversion
+                    // through a second buffer (direct casting fails compilation)
+                    union { char byte; dataType cbyte; } reg;
 
                     for (i = 0; i < I; i++) {
 
@@ -193,9 +195,9 @@ namespace idx {
 
                         for (j = 0; j < itemSize; j++) {
 
-                            file.read((char *)buffer, sizeof(dataType));
+                            file.read(&reg.byte, sizeof(dataType));
 
-                            data[i][j] = (castType)buffer;
+                            data[i][j] = reg.cbyte;
 
                         }
 
@@ -203,7 +205,7 @@ namespace idx {
 
                 } else {
 
-                    auto elemBuff = new AutoEndianBuffer<dataType>();
+                    auto formattedBuffer = new AutoEndianBuffer<dataType>();
 
                     for (i = 0; i < I; i++) {
 
@@ -211,9 +213,9 @@ namespace idx {
 
                         for (j = 0; j < itemSize; j++) {
 
-                            file.read(elemBuff->reg.bytes, sizeof(dataType));
+                            file.read(formattedBuffer->reg.bytes, sizeof(dataType));
 
-                            data[i][j] = (castType)(elemBuff->joined); //type cast this regardless of input format
+                            data[i][j] = (dataType)(formattedBuffer->reg.joined);
 
                         }
 
