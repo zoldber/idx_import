@@ -4,9 +4,9 @@
 
 int main(void) {
 
-    // given file item data type 'd', and desired type 'c':
-    // template is auto mySet = new idx::Set<d, c>("~/my_data.idxN");
-    auto demo = new idx::Set<char, unsigned char>(TRAIN_SET_DIR);
+    // given a data storage format 'd', and desired cast-type 'c', template is:
+    //      auto mySet = new idx::Set<d, c>("../data_path/data.idx3");
+    auto demo = new idx::Set<unsigned char, float>(TRAIN_SET_DIR);
 
     auto setDims = demo->dims();
 
@@ -24,7 +24,7 @@ int main(void) {
             for (c = 0; c < C; c++) {
 
                 // print pixel if darker than 50%
-                putc(demo->item(i)[(r * C) + c] > 0x80 ? '#' : ' ', stdout);
+                putc(demo->item(i)[(r * C) + c] > 128.0 ? '#' : ' ', stdout);
 
             }
 

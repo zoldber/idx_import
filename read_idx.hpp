@@ -48,8 +48,8 @@ namespace idx {
 
             }
 
-            // note: reconsider use of memcpy() (this is a proxy'd system 
-            // call that might not be as performant as direct assignment)
+            // note: reconsider use of memcpy() which might not be as performant 
+            // as a direct assignment)
             void writeTo(dataType * dest) {
 
                 if (isLE) {
@@ -176,17 +176,18 @@ namespace idx {
                 // an item is an [R * C] sized array
                 data = new castType * [I];
 
-                uint32_t i, j;
-
                 const unsigned int itemSize = R * C;
 
-                // the most ubiquitous MNIST seem to exclusively use uchar (hence no endianness beyond header)
-                // to store pixel values in each item; in the event that this is not true, seperate blocks are
-                // present to initialize a new AutoEndianBuffer and format entries on little-endian machines.
+                uint32_t i, j;
+
+                // The most ubiquitous MNIST collection seems uses uchar data exclusively (hence no endianness beyond
+                // file header) to store pixel values in each item; a separate read routine is included anyway in the
+                // event that an altered (or custom) file header specifies multi-byte data
                 if (sizeof(dataType) == sizeof(char)) {
 
-                    // this executed significantly faster than an explicit signed->unsigned conversion
-                    // through a second buffer (direct casting fails compilation)
+                    // the file.read() method expects a target arg of type 'char *__s', and template-casting for an
+                    // unsigned input was either flagged by the compiler or resulted in sporadic behavior for unit-
+                    // tests of varied casting types. An aliased buffer solves this with minimal complexity
                     union { char byte; dataType cbyte; } reg;
 
                     for (i = 0; i < I; i++) {
