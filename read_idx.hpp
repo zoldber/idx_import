@@ -20,7 +20,7 @@ namespace idx {
     // make no assumption regarding architecture of the host machine
     // nor the size of each datum within each item extracted (e.g.
     // an idx file with data exceeding a byte might be imported).
-    template<typename dataType>
+    template<typename readType>
     class AutoEndianBuffer {
 
         private:
@@ -34,15 +34,15 @@ namespace idx {
 
             union { 
                 
-                dataType joined; 
-                char bytes[sizeof(dataType)]; 
+                readType joined; 
+                char bytes[sizeof(readType)]; 
                 
             } reg;
 
             AutoEndianBuffer(void) {
 
                 // perform endianness test on init. This also sets BE to true
-                // (and thus skips byte-swapping) if dataType is a single byte
+                // (and thus skips byte-swapping) if readType is a single byte
                 reg.joined = 0x01;
                 isLE = reg.bytes[0];
 
@@ -50,11 +50,11 @@ namespace idx {
 
             // note: reconsider use of memcpy() which might not be as performant 
             // as a direct assignment)
-            void writeTo(dataType * dest) {
+            void writeTo(readType * dest) {
 
                 if (isLE) {
 
-                    for (i = 0, j = sizeof(dataType) - 1; i < j; ++i, --j) {
+                    for (i = 0, j = sizeof(readType) - 1; i < j; ++i, --j) {
 
                         reg.bytes[i] ^= reg.bytes[j];
                         reg.bytes[j] ^= reg.bytes[i];
@@ -63,7 +63,7 @@ namespace idx {
 
                 }
 
-                std::memcpy(dest, &reg.joined, sizeof(dataType));
+                std::memcpy(dest, &reg.joined, sizeof(readType));
 
                 return;
 
@@ -72,23 +72,22 @@ namespace idx {
 
     };
 
-    template<typename dataType, typename castType>
+    template<typename readType, typename castType>
     class Set {
 
         private:
 
-            // Set data can be represented this way for N = 1-3
-            // given I = item count, R = item row count, C = item col count
+            uint32_t magicNumber;
+
+            // given I, R, C = item, row, col counts respectively, and for path suffix:
+            // ".idxN", any set is represented in 3 dims, with the following precedence
             //
             // for N = 1 (a set of 1x1 items): data = [0:I][0:0]
             // for N = 2 (a set of 1xC items): data = [0:I][0:C]
             // for N = 3 (a set of RxC items): data = [0:I][0:R*C]
+            uint32_t I, R, C;
 
-            castType ** data;
-
-            uint32_t magicNumber;
-
-            // { numItems, R, C }
+            // dimension order: { I, R, C }
             std::tuple<uint32_t, uint32_t, uint32_t> dimensions;
 
 
@@ -113,6 +112,11 @@ namespace idx {
             }
 
         public:
+
+            castType ** data;
+
+            AutoEndianBuffer<uint32_t> * buff32;            // uint32_t type used for MNIST header
+            AutoEndianBuffer<readType> * formattedBuffer;   // only created if read-type has endianness (i.e. exceeds one byte in size)
 
             Set(const std::string filePath) {
 
@@ -140,7 +144,7 @@ namespace idx {
                 }
 
                 // header will contain u32 type values in need of endianess formatting
-                auto buff32 = new AutoEndianBuffer<uint32_t>();
+                buff32 = new AutoEndianBuffer<uint32_t>();
 
                 // all N!=0 idxN files will have u32 magicNum, u32 numItems
                 //  N = 2 will have u32numCols (numItems # of arrays)
@@ -149,9 +153,9 @@ namespace idx {
                 buff32->writeTo(&magicNumber);
 
                 // base-case dimensions of an idx_ structure
-                uint32_t I = 1;
-                uint32_t R = 1;
-                uint32_t C = 1;
+                I = 1;
+                R = 1;
+                C = 1;
 
                 // set numItems
                 file.read(buff32->reg.bytes, sizeof(uint32_t));
@@ -183,12 +187,12 @@ namespace idx {
                 // The most ubiquitous MNIST collection seems uses uchar data exclusively (hence no endianness beyond
                 // file header) to store pixel values in each item; a separate read routine is included anyway in the
                 // event that an altered (or custom) file header specifies multi-byte data
-                if (sizeof(dataType) == sizeof(char)) {
+                if (sizeof(readType) == sizeof(char)) {
 
                     // the file.read() method expects a target arg of type 'char *__s', and template-casting for an
                     // unsigned input was either flagged by the compiler or resulted in sporadic behavior for unit-
                     // tests of varied casting types. An aliased buffer solves this with minimal complexity
-                    union { char byte; dataType cbyte; } reg;
+                    union { char byte; readType cbyte; } reg;
 
                     for (i = 0; i < I; i++) {
 
@@ -196,7 +200,7 @@ namespace idx {
 
                         for (j = 0; j < itemSize; j++) {
 
-                            file.read(&reg.byte, sizeof(dataType));
+                            file.read(&reg.byte, sizeof(readType));
 
                             data[i][j] = reg.cbyte;
 
@@ -206,7 +210,7 @@ namespace idx {
 
                 } else {
 
-                    auto formattedBuffer = new AutoEndianBuffer<dataType>();
+                    formattedBuffer = new AutoEndianBuffer<readType>();
 
                     for (i = 0; i < I; i++) {
 
@@ -214,9 +218,9 @@ namespace idx {
 
                         for (j = 0; j < itemSize; j++) {
 
-                            file.read(formattedBuffer->reg.bytes, sizeof(dataType));
+                            file.read(formattedBuffer->reg.bytes, sizeof(readType));
 
-                            data[i][j] = (dataType)(formattedBuffer->reg.joined);
+                            data[i][j] = (readType)(formattedBuffer->reg.joined);
 
                         }
 
@@ -225,7 +229,7 @@ namespace idx {
 
                 }
 
-                size_t allocSize = I * R * C * sizeof(dataType);
+                size_t allocSize = I * R * C * sizeof(readType);
 
                 const std::string sizes[4] = { " bytes", " KB", " MB", " GB" };
 
@@ -236,24 +240,36 @@ namespace idx {
                 }
 
                 std::cout << " '--- allocated " << allocSize << sizes[i];
-                std::cout << " for " << I << " [ " << R << " x " << C << " ] items.\n"<< std::endl;
+                std::cout << " for " << I << " [ " << R << " x " << C << " ] items."<< std::endl;
 
                 return;
 
             }
 
+            ~Set(void) {
+
+                delete buff32;
+
+                delete formattedBuffer;
+                
+                for (size_t item = 0; item < I; item++) {
+
+                    delete data[item];
+
+                }
+
+                delete [] data;
+
+                return;
+
+            }
+
+            // { numItems, R, C }
             std::tuple<uint32_t, uint32_t, uint32_t> dims(void) {
 
                 return dimensions;
 
             }
 
-            castType * item(const unsigned int i) {
-
-                return data[i];
-
-            }
-
     };
-
 }

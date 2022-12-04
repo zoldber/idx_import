@@ -36,8 +36,6 @@ int main(void) {
 
     }
 
-    auto ref = demo->data;
-
     return 0;
 
 }
