@@ -90,6 +90,11 @@ namespace idx {
             // dimension order: { I, R, C }
             std::tuple<uint32_t, uint32_t, uint32_t> dimensions;
 
+            // uint32_t type used for MNIST header (idx format is nonstandard but most references describe this as one)
+            AutoEndianBuffer<uint32_t> * buff32;
+
+            // only created if read-type has endianness (i.e. exceeds one byte in size)
+            AutoEndianBuffer<readType> * formattedBuffer;
 
             // returns N for -.idxN- in filePath, or 0 for invalid suffix
             // consider seperate error codes for return cases below
@@ -113,10 +118,8 @@ namespace idx {
 
         public:
 
+            // public, as original read data need not be preserved or protected
             castType ** data;
-
-            AutoEndianBuffer<uint32_t> * buff32;            // uint32_t type used for MNIST header
-            AutoEndianBuffer<readType> * formattedBuffer;   // only created if read-type has endianness (i.e. exceeds one byte in size)
 
             Set(const std::string filePath) {
 
